@@ -1,0 +1,173 @@
+import collections
+import decimal
+
+
+def getTag(inputtin):
+        lisst = open(inputtin)
+        lines = lisst.read().splitlines()
+        return lines
+
+#format takes in the list right now 3 tags but later it would be any amount
+def format(inputtin):
+        list=getTag(inputtin)
+        grouped=[]
+        print(list)
+        for a in list:
+                bunch=[]
+                tags=[]
+                sep=a.split("\t")
+                bunch.append(sep[0])
+                for s in sep[1:]: tags.append(s)
+                bunch.append(tags)
+                grouped.append(bunch)
+        return grouped
+
+#Gets the ID columns for Positioning and later on grouping
+def getColName(inputtin):
+        lines=inputtin
+        colcul=lines.split()
+        return colcul
+
+## with a list  of ID and tags and then a list of returns the column that it was found it or "" if not found
+def getLoc(indi,list):
+        if((indi in list)==True):
+                return list.index(indi)
+        else:
+                return ""
+
+## output is a 2d list with first dimention being a list of related tags, and the second are all the different tag varients, first name, and  then the members that belong to that tag
+def makeGroup(listOtags, listOIds):
+        changeAbleText=listOtags
+        tagNum=len(listOtags[0][1])
+        print("Tag Number: "+str(tagNum))
+        changedText=[]
+        a=0
+        print("list of IDS: "+str(listOIds))
+        while(a<len(changeAbleText)):
+                if (getLoc(changeAbleText[a][0],listOIds)!= None):
+                        changeAbleText[a][0]=getLoc(listOtags[a][0],listOIds)
+                a+=1
+        for b in changeAbleText:
+                if b[0]!="":
+                        changedText.append(b)
+                print(changedText)
+        recTags=[]
+        t=0
+        taggedDestinations=[["Start"]]
+        listOGroups=[]
+        while t<tagNum:
+                taggedDestinations=[["Start"]]
+                for b in changedText:
+                        if ((b[1][t] in recTags)==False and b[0]!=None):
+                                recTags.append(b[1][t])
+                                taggedDestinations.append([b[1][t]])
+                                taggedDestinations[len(taggedDestinations)-1].append(b[0])
+                        else:
+                                i=0
+                                while i<len(taggedDestinations):
+                                        if(taggedDestinations[i][0]==b[1][t] and b[0] != None):
+                                                taggedDestinations[i].append(b[0])
+                                        i=i+1
+                taggedDestinations.remove(["Start"])
+                listOGroups.append(taggedDestinations)
+                t=t+1
+        return(listOGroups)
+
+def singleTagList(indexes, snpLine):
+        indlist=indexes
+        name=indexes[0]
+        snpList=snpLine.strip("\n").split()
+        singleTagged=[]
+        info=snpList[0:4]
+        for a in indlist:
+                if a<=len(snpList)-1:
+                        singleTagged.append(snpList[int(a)])
+        return name,info,singleTagged
+
+def countAAF(line):
+        total=0
+        total+=line.count("0/1")+line.count("1/0")+(line.count("1/1")*2)
+        return total
+
+        # list is ['Chr01.clean.vcf:Chr01', '729', 'C', 'G']
+
+def allTogeatherNow(tagFile, vcfFile):
+        header=[]
+        n=1
+        a= open("ausgabe.txt","w+")
+        tags = format(tagFile)
+        vcif = open(vcfFile)
+        data = vcif.read().splitlines()
+        d = 0
+        first=True
+        while(data[d][0]=="#" and d<100):
+                header.append(data[d])
+                if data[d][0:2]!="##" and first ==True:
+                        col=data[d]
+                        start=d
+                        first=False
+                d+=1
+        dataMinus=data[d:]
+        columnName=getColName(col)
+        print("Input tag: "+str(tags))
+        print("Input ColumnName: "+str(columnName))
+        grouped=makeGroup(tags,columnName)
+        f=open(vcfFile+".Tag1.gsnp","w+")
+        s=open(vcfFile+".SigTag1.gsnp","w+")
+        # in tags: makes a new file for each tag type
+        print("Grouped: "+str(grouped))
+        sig=False
+        print(" THE Grouped: "+str(grouped))
+        for b in grouped:
+                numTags=len(b)
+                print("\n\nTHIS IS THE NUM of  TAGS Varients:  "+str(numTags))
+
+                for h in header: ## header to each tag file so that they all contain the same meta data from orignial file
+                        f.write(str(h)+"\n")
+                        s.write(str(h)+"\n")
+                f.write(str(b)+"\n")
+                s.write(str(b)+"\n")
+                signif=""
+                for workingLine in dataMinus:
+                        l=0
+                        name, info, number=singleTagList(b[0] ,workingLine)
+                        if info!=[]:
+                                f.write("\n"+str(info[1])+" Info:\t"+str(info)+"\tResults:")
+                        signif=str(info[1])+"\tInfo: "+str(info)+"Results:"
+                        lineToCompare=[]
+                        while l<len(b):
+                                name, info, number=singleTagList(b[l] ,workingLine)
+#                               ##get info of line and past Chr#. Pos. Ref. Alt: then add in the tag varients and counts
+                                if len(number)!=0 and info!=[]:
+                                        print(str(number))
+                                        percent=round(float(100*(float(countAAF(number))/(2*len(number)))),4)
+                                lineToCompare.append(percent)
+
+                                f.write(" "+str(name)+" "+str(countAAF(number))+"/"+str(2*(len(number)))+" " +str(percent)+"%")
+                                signif=signif+"\t"+str(str(name)+" "+str(countAAF(number))+"/"+str(2*(len(number)))+" " +str(percent)+"%")
+                                l+=1
+                        nine=False
+                        zero=0
+                        sig=False
+                        for pe in lineToCompare:
+                                if pe >=70: nine=True
+                                elif pe <=10: zero=zero+1
+                        if nine==True and zero>=numTags-1:
+                                sig = True
+                        if sig==True:
+                                s.write(signif+"\n")
+                                print(" added:"+str(lineToCompare))
+                        signif=""
+                        zero=0
+                        sig=False
+                        f.write("\n")
+                f.close()
+                s.close()
+                n+=1
+                if n<len(grouped)+1:
+                        f=open(vcfFile+".Tag"+str(n)+".gsnp","w+")
+                        s=open(vcfFile+".SigTag"+str(n)+".gsnp","w+")
+lines="tagRegion.txt"
+vcfs="finalMerge.clean.vcf"
+#vcfs="testVCF.vcf"
+allTogeatherNow(lines, vcfs)
